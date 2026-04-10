@@ -1,0 +1,17 @@
+name: project-approval-env
+description: AI-based Project Approval Decision Environment
+
+observation_space:
+  project_id: int
+  title: string
+  budget: int
+  risk_level: string
+  status: string
+  completeness: float
+
+action_space:
+  decision: string
+  comments: string
+
+reward:
+  score: float
