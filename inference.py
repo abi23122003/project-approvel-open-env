@@ -6,22 +6,19 @@ from openai import OpenAI
 from environment import ProjectApprovalEnv
 from models import Action
 
-API_KEY = os.environ.get("API_KEY") or os.environ.get("OPENAI_API_KEY")
+API_KEY = os.getenv("HF_TOKEN") or os.getenv("API_KEY") or os.getenv("OPENAI_API_KEY")
 MODEL_NAME = os.environ.get("MODEL_NAME", "llama-3.1-8b-instant")
 API_BASE_URL = os.environ.get("API_BASE_URL", "https://api.groq.com/openai/v1")
+BENCHMARK = "project-approval"
 
-client = OpenAI(
-    api_key=API_KEY,
-    base_url=API_BASE_URL
-)
+client = OpenAI(api_key=API_KEY, base_url=API_BASE_URL)
 
-print("[START]")
 env = ProjectApprovalEnv()
-total_reward = 0.0
-task_count = 0
+total_rewards = []
 
 for level in ["easy", "medium", "hard"]:
-    print(f"[STEP] task_difficulty={level}")
+    print(f"[START] task={level} env={BENCHMARK} model={MODEL_NAME}", flush=True)
+    
     obs = env.reset(level)
     observation_data = {
         "project_id": obs.project_id,
@@ -31,7 +28,6 @@ for level in ["easy", "medium", "hard"]:
         "status": obs.status,
         "completeness": obs.completeness
     }
-    print(f"[STEP] observation={json.dumps(observation_data)}")
 
     prompt = f"""You are a project approval agent. Make a decision based on these rules:
 - If completeness > 0.8 AND risk_level is low -> decide: approve
@@ -42,6 +38,8 @@ Project: {json.dumps(observation_data)}
 
 Respond with ONLY one word: approve, reject, or request_changes"""
 
+    error = None
+    decision = "request_changes"
     try:
         response = client.chat.completions.create(
             model=MODEL_NAME,
@@ -52,17 +50,15 @@ Respond with ONLY one word: approve, reject, or request_changes"""
         if decision not in ["approve", "reject", "request_changes"]:
             decision = "request_changes"
     except Exception as e:
-        print(f"[STEP] error={str(e)}")
-        decision = "request_changes"
+        error = str(e)
 
-    print(f"[STEP] decision={decision}")
     action = Action(decision=decision)
     obs, reward, done, _ = env.step(action)
-    print(f"[STEP] reward={reward.score}")
-    total_reward += reward.score
-    task_count += 1
-
-print(f"[STEP] total_reward={total_reward}")
-print(f"[STEP] total_tasks={task_count}")
-print(f"[STEP] average_reward={total_reward / task_count if task_count > 0 else 0}")
-print("[END]")
+    
+    error_val = error if error else "null"
+    print(f"[STEP] step=1 action={decision} reward={reward.score:.2f} done=true error={error_val}", flush=True)
+    
+    score = reward.score
+    total_rewards.append(score)
+    success = score >= 0.5
+    print(f"[END] success={str(success).lower()} steps=1 score={score:.3f} rewards={score:.2f}", flush=True)
