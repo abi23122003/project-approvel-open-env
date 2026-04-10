@@ -38,8 +38,8 @@ class ProjectApprovalEnv:
     def calculate_reward(self, action):
         """Calculate reward based on decision correctness"""
         if action.decision == self.correct_decision:
-            return Reward(score=1.0)  # Correct decision = full reward
+            return Reward(score=0.9)  # Correct decision = 0.9 (must be < 1.0)
         elif action.decision == "request_changes":
             return Reward(score=0.5)  # Request changes = partial reward
         else:
-            return Reward(score=0.0)  # Wrong decision = no reward 
+            return Reward(score=0.1)  # Wrong decision = 0.1 (must be > 0.0) 
