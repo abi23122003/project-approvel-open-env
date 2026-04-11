@@ -11,6 +11,7 @@ def grader_medium(prediction, correct_answer):
 
 def get_medium_task():
     return {
+        "name": "medium",
         "project_id": random.randint(1000, 9999),
         "title": "City Park Smart Lighting System",
         "budget": 120000,

@@ -11,6 +11,7 @@ def grader_hard(prediction, correct_answer):
 
 def get_hard_task():
     return {
+        "name": "hard",
         "project_id": random.randint(1000, 9999),
         "title": "Nuclear Waste Processing Plant",
         "budget": 9500000,

@@ -11,6 +11,7 @@ def grader_easy(prediction, correct_answer):
 
 def get_easy_task():
     return {
+        "name": "easy",
         "project_id": random.randint(1000, 9999),
         "title": "Community Library Renovation",
         "budget": 50000,
