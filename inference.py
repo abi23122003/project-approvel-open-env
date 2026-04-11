@@ -6,6 +6,8 @@ from openai import OpenAI
 from tasks.easy import get_easy_task
 from tasks.medium import get_medium_task
 from tasks.hard import get_hard_task
+from environment import ProjectApprovalEnv
+from models import Action
 
 # === API Configuration (injected by hackathon platform) ===
 API_KEY = os.environ.get("API_KEY", "dummy-key")
@@ -17,20 +19,27 @@ print(f"[CONFIG] API_BASE_URL={'<set>' if API_BASE_URL else '<empty>'}", flush=T
 print(f"[CONFIG] MODEL_NAME={MODEL_NAME}", flush=True)
 print(f"[CONFIG] API_KEY={'<set>' if API_KEY else '<empty>'}", flush=True)
 
-# Initialize OpenAI client with hackathon proxy
 client = OpenAI(api_key=API_KEY, base_url=API_BASE_URL)
 
-def get_llm_decision(task):
-    """Call LLM via hackathon proxy to make a decision."""
-    prompt = f"""You are a project approval agent. Evaluate this project and decide what to do.
+def get_llm_decision(obs, step_num, changes_so_far):
+    prompt = f"""You are a project approval agent evaluating a project proposal.
 
 Project Details:
-- Title: {task['title']}
-- Budget: ${task['budget']:,}
-- Risk Level: {task['risk_level']}
-- Completeness: {int(task['completeness'] * 100)}%
+- Title: {obs.title}
+- Budget: ${obs.budget:,}
+- Risk Level: {obs.risk_level}
+- Completeness: {int(obs.completeness * 100)}%
+- Status: {obs.status}
+- Review Step: {step_num} of 3
+- Changes Already Requested: {changes_so_far}
 
-You must respond with EXACTLY one of these three words only:
+Guidelines:
+- If completeness < 60% and changes not yet requested: request_changes
+- If completeness >= 85% and risk is low: approve
+- If risk is high and completeness < 50%: reject
+- Otherwise: use your judgment
+
+Respond with EXACTLY one word only:
 approve
 reject
 request_changes
@@ -41,11 +50,10 @@ Your decision:"""
         response = client.chat.completions.create(
             model=MODEL_NAME,
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=20,
+            max_tokens=10,
             temperature=0
         )
         decision = response.choices[0].message.content.strip().lower()
-        # Clean up response to match valid actions
         if "approve" in decision and "request" not in decision:
             return "approve"
         elif "reject" in decision:
@@ -56,13 +64,43 @@ Your decision:"""
         print(f"[WARN] LLM call failed: {e}, defaulting to request_changes", flush=True)
         return "request_changes"
 
-def default_grader(prediction, correct):
-    return 0.6
+def run_task(task, task_name):
+    env = ProjectApprovalEnv()
 
+    # Manually load task into env
+    env.project = {k: v for k, v in task.items() if k not in ("correct_decision", "grader", "name")}
+    env.correct_decision = task["correct_decision"]
+    env.step_count = 0
+    env.changes_requested = 0
+
+    from models import Observation
+    obs = Observation(**env.project)
+
+    print(f"[START] task={task_name}", flush=True)
+
+    total_reward = 0
+    step_num = 0
+    done = False
+
+    while not done:
+        step_num += 1
+        decision = get_llm_decision(obs, step_num, env.changes_requested)
+        action = Action(decision=decision)
+        obs, reward, done, info = env.step(action)
+        total_reward += reward.score
+
+        print(f"[STEP] step={step_num} action={decision} reward={reward.score:.2f} done={str(done).lower()} error=null", flush=True)
+
+    success = total_reward >= 0.5
+    avg_reward = total_reward / step_num
+    print(f"[END] success={str(success).lower()} steps={step_num} score={avg_reward:.3f} rewards={total_reward:.2f}", flush=True)
+    return avg_reward
+
+# Run all 3 tasks
 tasks_list = [
-    get_easy_task(),
-    get_medium_task(),
-    get_hard_task()
+    (get_easy_task(), "easy"),
+    (get_medium_task(), "medium"),
+    (get_hard_task(), "hard")
 ]
 
 print(f"[INFO] Starting Phase 2 Validation - Total Tasks: {len(tasks_list)}", flush=True)
@@ -70,43 +108,27 @@ print(f"[INFO] Starting Phase 2 Validation - Total Tasks: {len(tasks_list)}", fl
 all_rewards = []
 executed_tasks = []
 
-for idx, task in enumerate(tasks_list):
-    task_name = task["name"]
-    correct_decision = task["correct_decision"]
-    grader = task.get("grader", default_grader)
-
-    print(f"[START] task={task_name}", flush=True)
-
-    # Make real LLM API call
-    prediction = get_llm_decision(task)
-
-    score = grader(prediction, correct_decision)
+for task, task_name in tasks_list:
+    score = run_task(task, task_name)
     all_rewards.append(score)
-
-    success = score >= 0.5
-    print(f"[STEP] step=1 action={prediction} reward={score:.2f} done=true error=null", flush=True)
-    print(f"[END] success={str(success).lower()} steps=1 score={score:.3f} rewards={score:.2f}", flush=True)
-
     executed_tasks.append(task_name)
 
 print(f"\n# VALIDATION CHECKPOINT", flush=True)
 print(f"Executed tasks: {executed_tasks}", flush=True)
 if len(executed_tasks) == 3:
     print(f"[SUCCESS] All {len(executed_tasks)} tasks executed", flush=True)
-else:
-    print(f"[ERROR] Not all tasks executed!", flush=True)
 
 print(f"\n# FINAL SUMMARY", flush=True)
 print(f"Total tasks: {len(executed_tasks)}", flush=True)
 print(f"All rewards: {[f'{r:.3f}' for r in all_rewards]}", flush=True)
 print(f"Total rewards: {sum(all_rewards):.2f}", flush=True)
-print(f"Average score: {sum(all_rewards) / len(executed_tasks) if executed_tasks else 0:.3f}", flush=True)
+print(f"Average score: {sum(all_rewards)/len(executed_tasks):.3f}", flush=True)
 
-unique_scores = set(all_rewards)
+unique_scores = set(round(r, 2) for r in all_rewards)
 if len(unique_scores) > 1:
     print(f"[SUCCESS] Scores vary across tasks: {len(unique_scores)} unique values", flush=True)
 else:
-    print(f"[WARNING] All scores are identical", flush=True)
+    print(f"[WARNING] All scores identical", flush=True)
 
 if len(executed_tasks) == 3 and all(0 < r < 1 for r in all_rewards):
     print(f"\n# PHASE 2 VALIDATION: PASSED ✓", flush=True)
