@@ -1,144 +1,230 @@
-from dotenv import load_dotenv
-load_dotenv()
 import os
 import json
-import gradio as gr
+from fastapi import FastAPI
+from fastapi.responses import JSONResponse, HTMLResponse
+import uvicorn
+from dotenv import load_dotenv
+from environment import ProjectApprovalEnv
+from models import Action
 
 load_dotenv()
 
-# Use environment variables with defaults
-API_KEY = os.environ.get("API_KEY", "dummy-key")
-MODEL_NAME = os.environ.get("MODEL_NAME", "gpt-3.5-turbo")
-API_BASE_URL = os.environ.get("API_BASE_URL", "https://api.openai.com/v1")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY") or os.environ.get("OPENAI_API_KEY")
+MODEL_NAME = os.getenv("MODEL_NAME", "llama-3.1-8b-instant")
+API_BASE_URL = os.getenv("API_BASE_URL", "https://api.groq.com/openai/v1")
 
-client = None
+app = FastAPI(title="Project Approval OpenEnv")
+env = ProjectApprovalEnv()
 
-def get_client():
-    """Get or initialize the OpenAI client"""
-    global client
-    if client is not None:
-        return client
-    
-    try:
-        from openai import OpenAI
-        client = OpenAI(api_key=API_KEY, base_url=API_BASE_URL, timeout=30.0)
-        return client
-    except Exception as e:
-        print(f"Warning: Could not initialize OpenAI client: {e}")
-        return None
+@app.get("/", response_class=HTMLResponse)
+def root():
+    return """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Approval OpenEnv</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; padding: 20px; }
+        h1 { text-align: center; color: #38bdf8; margin-bottom: 8px; font-size: 2rem; }
+        .subtitle { text-align: center; color: #94a3b8; margin-bottom: 30px; }
+        .container { max-width: 900px; margin: 0 auto; }
+        .card { background: #1e293b; border-radius: 12px; padding: 20px; margin-bottom: 20px; border: 1px solid #334155; }
+        .card h2 { color: #38bdf8; margin-bottom: 15px; font-size: 1.1rem; }
+        .controls { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+        select, button { padding: 10px 18px; border-radius: 8px; border: none; font-size: 0.95rem; cursor: pointer; }
+        select { background: #0f172a; color: #e2e8f0; border: 1px solid #475569; }
+        button { background: #0284c7; color: white; font-weight: 600; transition: background 0.2s; }
+        button:hover { background: #0369a1; }
+        button.approve { background: #16a34a; }
+        button.approve:hover { background: #15803d; }
+        button.reject { background: #dc2626; }
+        button.reject:hover { background: #b91c1c; }
+        button.changes { background: #d97706; }
+        button.changes:hover { background: #b45309; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+        .stat { background: #0f172a; border-radius: 8px; padding: 14px; border: 1px solid #334155; }
+        .stat-label { color: #94a3b8; font-size: 0.8rem; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+        .stat-value { font-size: 1.3rem; font-weight: 700; color: #f1f5f9; }
+        .badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 0.8rem; font-weight: 600; }
+        .badge-low { background: #166534; color: #bbf7d0; }
+        .badge-medium { background: #854d0e; color: #fef08a; }
+        .badge-high { background: #991b1b; color: #fecaca; }
+        .badge-pending { background: #1e40af; color: #bfdbfe; }
+        .badge-approved { background: #166534; color: #bbf7d0; }
+        .badge-rejected { background: #991b1b; color: #fecaca; }
+        .log { background: #0f172a; border-radius: 8px; padding: 14px; font-family: monospace; font-size: 0.85rem; max-height: 200px; overflow-y: auto; border: 1px solid #334155; }
+        .log-entry { padding: 4px 0; border-bottom: 1px solid #1e293b; color: #94a3b8; }
+        .log-entry.good { color: #4ade80; }
+        .log-entry.bad { color: #f87171; }
+        .reward-bar { height: 8px; background: #0f172a; border-radius: 4px; margin-top: 8px; overflow: hidden; }
+        .reward-fill { height: 100%; background: linear-gradient(90deg, #ef4444, #eab308, #22c55e); border-radius: 4px; transition: width 0.4s; }
+        #status-msg { text-align: center; padding: 10px; border-radius: 8px; margin-top: 10px; display: none; }
+        .msg-good { background: #14532d; color: #86efac; }
+        .msg-bad { background: #7f1d1d; color: #fca5a5; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🏛️ Project Approval OpenEnv</h1>
+    <p class="subtitle">RL Environment for AI Project Decision Making</p>
 
-def evaluate_project(difficulty):
-    try:
-        # Simulate project data based on difficulty
-        if difficulty == "easy":
-            obs = {
-                'project_id': 1,
-                'title': 'Easy Project',
-                'budget': 50000,
-                'risk_level': 'low',
-                'status': 'submitted',
-                'completeness': 0.9
-            }
-            correct_decision = "approve"
-        elif difficulty == "medium":
-            obs = {
-                'project_id': 2,
-                'title': 'Medium Project',
-                'budget': 100000,
-                'risk_level': 'medium',
-                'status': 'submitted',
-                'completeness': 0.6
-            }
-            correct_decision = "request_changes"
-        else:  # hard
-            obs = {
-                'project_id': 3,
-                'title': 'Hard Project',
-                'budget': 200000,
-                'risk_level': 'high',
-                'status': 'submitted',
-                'completeness': 0.3
-            }
-            correct_decision = "reject"
-        
-        observation_data = obs
-        
-        prompt = f"""You are a project approval agent. Based on the project details, make a decision.
+    <div class="card">
+        <h2>⚙️ Controls</h2>
+        <div class="controls">
+            <select id="difficulty">
+                <option value="easy">Easy</option>
+                <option value="medium">Medium</option>
+                <option value="hard">Hard</option>
+            </select>
+            <button onclick="resetEnv()">🔄 New Project</button>
+            <button class="approve" onclick="makeDecision('approve')">✅ Approve</button>
+            <button class="changes" onclick="makeDecision('request_changes')">✏️ Request Changes</button>
+            <button class="reject" onclick="makeDecision('reject')">❌ Reject</button>
+        </div>
+        <div id="status-msg"></div>
+    </div>
 
-Project: {obs}
+    <div class="card">
+        <h2>📋 Current Project</h2>
+        <div class="grid" id="project-grid">
+            <div class="stat"><div class="stat-label">Project ID</div><div class="stat-value" id="project-id">—</div></div>
+            <div class="stat"><div class="stat-label">Title</div><div class="stat-value" id="title" style="font-size:0.95rem">—</div></div>
+            <div class="stat"><div class="stat-label">Budget</div><div class="stat-value" id="budget">—</div></div>
+            <div class="stat"><div class="stat-label">Risk Level</div><div class="stat-value" id="risk">—</div></div>
+            <div class="stat"><div class="stat-label">Status</div><div class="stat-value" id="status">—</div></div>
+            <div class="stat"><div class="stat-label">Completeness</div><div class="stat-value" id="completeness">—</div></div>
+        </div>
+    </div>
 
-Rules:
-- If completeness > 0.8 AND risk_level is 'low' → decide: approve
-- If completeness < 0.5 OR risk_level is 'high' → decide: reject  
-- Otherwise → decide: request_changes
+    <div class="card">
+        <h2>📊 Last Reward</h2>
+        <div id="reward-display" style="font-size:2rem;font-weight:700;color:#38bdf8;">—</div>
+        <div class="reward-bar"><div class="reward-fill" id="reward-bar" style="width:50%"></div></div>
+    </div>
 
-Respond with ONLY one word: approve, reject, or request_changes"""
-        
-        decision = "request_changes"
-        try:
-            api_client = get_client()
-            if api_client is not None:
-                response = api_client.chat.completions.create(
-                    model=MODEL_NAME,
-                    max_tokens=10,
-                    messages=[{"role": "user", "content": prompt}],
-                    timeout=20.0
-                )
-                decision = response.choices[0].message.content.strip().lower()
-                if decision not in ["approve", "reject", "request_changes"]:
-                    decision = correct_decision
-            else:
-                decision = correct_decision
-        except Exception as api_error:
-            print(f"API Error: {api_error}")
-            decision = correct_decision
-        
-        # Calculate reward score
-        if decision == correct_decision:
-            reward_score = 0.85
-        elif decision == "request_changes":
-            reward_score = 0.50
-        else:
-            reward_score = 0.25
-        
-        return (
-            json.dumps(observation_data, indent=2),
-            decision.upper(),
-            f"{reward_score:.2f}"
-        )
-    except Exception as e:
-        print(f"Error: {e}")
-        return (
-            json.dumps({"error": str(e)}),
-            "ERROR",
-            "0.5"
-        )
+    <div class="card">
+        <h2>📜 Decision Log</h2>
+        <div class="log" id="log"><div class="log-entry">Start a new project to begin...</div></div>
+    </div>
+</div>
 
-# Create the Gradio interface
-with gr.Blocks(title="Project Approval AI") as demo:
-    gr.Markdown("# Project Approval Evaluation System")
-    gr.Markdown("Evaluate project proposals using AI with different difficulty levels")
-    
-    with gr.Row():
-        difficulty = gr.Radio(
-            choices=["easy", "medium", "hard"],
-            value="easy",
-            label="Difficulty Level"
-        )
-    
-    submit_btn = gr.Button("Evaluate Project", variant="primary")
-    
-    with gr.Row():
-        project_info = gr.Textbox(label="Project Information", lines=6)
-        decision_output = gr.Textbox(label="Decision")
-        reward_output = gr.Textbox(label="Reward")
-    
-    submit_btn.click(
-        fn=evaluate_project,
-        inputs=[difficulty],
-        outputs=[project_info, decision_output, reward_output]
-    )
+<script>
+    let logEntries = [];
 
-# Launch the app - HF Spaces will handle this
+    function addLog(msg, type='') {
+        logEntries.unshift({msg, type});
+        if (logEntries.length > 50) logEntries.pop();
+        const log = document.getElementById('log');
+        log.innerHTML = logEntries.map(e => `<div class="log-entry ${e.type}">${e.msg}</div>`).join('');
+    }
+
+    function showStatus(msg, good=true) {
+        const el = document.getElementById('status-msg');
+        el.textContent = msg;
+        el.className = good ? 'msg-good' : 'msg-bad';
+        el.style.display = 'block';
+        setTimeout(() => el.style.display = 'none', 3000);
+    }
+
+    function renderProject(obs) {
+        document.getElementById('project-id').textContent = obs.project_id || '—';
+        document.getElementById('title').textContent = obs.title || '—';
+        document.getElementById('budget').textContent = obs.budget ? '$' + Number(obs.budget).toLocaleString() : '—';
+
+        const risk = obs.risk_level || '';
+        const riskClass = risk === 'low' ? 'badge-low' : risk === 'medium' ? 'badge-medium' : 'badge-high';
+        document.getElementById('risk').innerHTML = `<span class="badge ${riskClass}">${risk}</span>`;
+
+        const status = obs.status || '';
+        const statusClass = status === 'approved' ? 'badge-approved' : status === 'rejected' ? 'badge-rejected' : 'badge-pending';
+        document.getElementById('status').innerHTML = `<span class="badge ${statusClass}">${status}</span>`;
+
+        const comp = obs.completeness != null ? Math.round(obs.completeness * 100) + '%' : '—';
+        document.getElementById('completeness').textContent = comp;
+    }
+
+    async function resetEnv() {
+        const diff = document.getElementById('difficulty').value;
+        try {
+            const res = await fetch('/reset?difficulty=' + diff, {method: 'POST'});
+            const data = await res.json();
+            renderProject(data);
+            document.getElementById('reward-display').textContent = '—';
+            document.getElementById('reward-bar').style.width = '50%';
+            addLog(`[NEW] Project "${data.title}" loaded (${diff})`, 'good');
+            showStatus('New project loaded!', true);
+        } catch(e) {
+            addLog('[ERROR] Failed to reset: ' + e.message, 'bad');
+            showStatus('Error connecting to server', false);
+        }
+    }
+
+    async function makeDecision(decision) {
+        try {
+            const res = await fetch('/step?decision=' + decision, {method: 'POST'});
+            const data = await res.json();
+            renderProject(data.observation);
+            const reward = data.reward;
+            document.getElementById('reward-display').textContent = reward >= 0 ? '+' + reward.toFixed(2) : reward.toFixed(2);
+            const pct = Math.min(100, Math.max(0, (reward + 1) / 2 * 100));
+            document.getElementById('reward-bar').style.width = pct + '%';
+            const type = reward > 0 ? 'good' : reward < 0 ? 'bad' : '';
+            addLog(`[${decision.toUpperCase()}] Reward: ${reward.toFixed(2)} | Done: ${data.done}`, type);
+            if (data.done) showStatus('Episode done! Start a new project.', reward >= 0);
+            else showStatus('Decision made: ' + decision, reward >= 0);
+        } catch(e) {
+            addLog('[ERROR] ' + e.message, 'bad');
+            showStatus('Error — reset first?', false);
+        }
+    }
+
+    // Auto-load on start
+    resetEnv();
+</script>
+</body>
+</html>
+"""
+
+@app.post("/reset")
+def reset(difficulty: str = "easy"):
+    obs = env.reset(difficulty)
+    return JSONResponse(content={
+        "project_id": obs.project_id,
+        "title": obs.title,
+        "budget": obs.budget,
+        "risk_level": obs.risk_level,
+        "status": obs.status,
+        "completeness": obs.completeness
+    })
+
+@app.post("/step")
+def step(decision: str = "request_changes"):
+    action = Action(decision=decision)
+    obs, reward, done, info = env.step(action)
+    return JSONResponse(content={
+        "observation": {
+            "project_id": obs.project_id,
+            "title": obs.title,
+            "budget": obs.budget,
+            "risk_level": obs.risk_level,
+            "status": obs.status,
+            "completeness": obs.completeness
+        },
+        "reward": reward.score,
+        "done": done,
+        "info": info
+    })
+
+@app.get("/state")
+def state():
+    return JSONResponse(content=env.state())
+
+@app.get("/health")
+def health():
+    return {"status": "healthy"}
+
 if __name__ == "__main__":
-    demo.launch(server_name="0.0.0.0", server_port=7860, share=False)
+    uvicorn.run(app, host="0.0.0.0", port=7860)
