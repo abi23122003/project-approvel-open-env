@@ -9,25 +9,20 @@ from tasks.hard import get_hard_task
 from models import Action
 
 # === API Configuration from Environment Variables (HACKATHON LITELLM PROXY) ===
-# Required environment variables (set in .env or platform)
-API_KEY = os.environ.get("API_KEY")
-MODEL_NAME = os.environ.get("MODEL_NAME")
-API_BASE_URL = os.environ.get("API_BASE_URL")
+# These must be injected at runtime by hackathon platform or set in .env
+API_KEY = os.environ.get("API_KEY", "")
+MODEL_NAME = os.environ.get("MODEL_NAME", "gpt-4o-mini")
+API_BASE_URL = os.environ.get("API_BASE_URL", "")
 BENCHMARK = "project-approval"
 
-# Validate required API configuration
-if not API_KEY:
-    raise ValueError("ERROR: API_KEY not set! Configure in .env or environment.")
-if not API_BASE_URL:
-    raise ValueError("ERROR: API_BASE_URL not set! Configure in .env or environment.")
-if not MODEL_NAME:
-    raise ValueError("ERROR: MODEL_NAME not set! Configure in .env or environment.")
-
+# Log actual configuration (for debugging)
 print(f"[CONFIG] Initializing OpenEnv with LiteLLM Proxy", flush=True)
-print(f"[CONFIG] API_BASE_URL={API_BASE_URL}", flush=True)
+print(f"[CONFIG] API_BASE_URL={'<set>' if API_BASE_URL else '<empty - will be injected>'}", flush=True)
 print(f"[CONFIG] MODEL_NAME={MODEL_NAME}", flush=True)
+print(f"[CONFIG] API_KEY={'<set>' if API_KEY else '<empty - will be injected>'}", flush=True)
 
-# Initialize OpenAI client pointing to hackathon LiteLLM proxy
+# Initialize OpenAI client - will use runtime injected values
+# Do NOT validate here - let hackathon platform inject values at runtime
 client = OpenAI(api_key=API_KEY, base_url=API_BASE_URL)
 
 # Collect all tasks with graders
@@ -73,7 +68,7 @@ Respond with ONLY one word: approve, reject, or request_changes"""
     # === MANDATORY: CALL LLM THROUGH LITELLM PROXY ===
     # This API call MUST execute - no bypass or mock responses allowed
     try:
-        print(f"[API_CALL] Sending request to LiteLLM proxy at {API_BASE_URL}", flush=True)
+        print(f"[API_CALL] Sending request to LLM API", flush=True)
         
         response = client.chat.completions.create(
             model=MODEL_NAME,
@@ -99,11 +94,11 @@ Respond with ONLY one word: approve, reject, or request_changes"""
         
         # Provide diagnostic output for common errors
         if "401" in str(e) or "Unauthorized" in str(e):
-            print(f"[DIAGNOSTIC] Authentication failed - check API_KEY configuration", flush=True)
+            print(f"[DIAGNOSTIC] Authentication failed - verify API_KEY", flush=True)
         elif "Connection" in str(e) or "timeout" in str(e).lower():
-            print(f"[DIAGNOSTIC] Cannot reach {API_BASE_URL} - check API_BASE_URL configuration", flush=True)
+            print(f"[DIAGNOSTIC] Connection error - verify API_BASE_URL is set and reachable", flush=True)
         elif "Model" in str(e) or "not found" in str(e).lower():
-            print(f"[DIAGNOSTIC] Model '{MODEL_NAME}' not available - check MODEL_NAME configuration", flush=True)
+            print(f"[DIAGNOSTIC] Model not available - verify MODEL_NAME configuration", flush=True)
         
         # Use neutral fallback - still gets graded (NOT a bypass)
         prediction = "request_changes"
