@@ -46,16 +46,23 @@ for idx, task in enumerate(tasks_list):
     correct_decision = task["correct_decision"]
     grader = task.get("grader", default_grader)
 
-    # Execute task
+    # ✅ ADD THIS
+    print(f"[START] task={task_name}", flush=True)
+
     prediction = "approve"
+
     score = grader(prediction, correct_decision)
 
-    # ✅ ADD THIS LINE HERE
+    # ✅ keep this
     all_rewards.append(score)
 
-    print(f"[INFO] Task {task_name}: Score = {score}", flush=True)
+    # ✅ ADD THIS
+    print(f"[STEP] action={prediction} reward={score}", flush=True)
+
+    # ✅ ADD THIS
+    print(f"[END] score={score}", flush=True)
+
     executed_tasks.append(task_name)
-print(f"[INFO] All tasks executed: {executed_tasks}", flush=True)
 
 # Validate all tasks executed
 print(f"\n# VALIDATION CHECKPOINT", flush=True)
