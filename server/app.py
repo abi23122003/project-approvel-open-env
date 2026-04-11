@@ -3,17 +3,16 @@ load_dotenv()
 import os
 import json
 import gradio as gr
- 
+
 load_dotenv()
- 
-# Use environment variables with defaults - no crash if missing
+
+# Use environment variables with defaults
 API_KEY = os.environ.get("API_KEY", "dummy-key")
 MODEL_NAME = os.environ.get("MODEL_NAME", "gpt-3.5-turbo")
 API_BASE_URL = os.environ.get("API_BASE_URL", "https://api.openai.com/v1")
- 
-# Initialize OpenAI client
+
 client = None
- 
+
 def get_client():
     """Get or initialize the OpenAI client"""
     global client
@@ -27,7 +26,7 @@ def get_client():
     except Exception as e:
         print(f"Warning: Could not initialize OpenAI client: {e}")
         return None
- 
+
 def evaluate_project(difficulty):
     try:
         # Simulate project data based on difficulty
@@ -65,14 +64,14 @@ def evaluate_project(difficulty):
         observation_data = obs
         
         prompt = f"""You are a project approval agent. Based on the project details, make a decision.
- 
+
 Project: {obs}
- 
+
 Rules:
 - If completeness > 0.8 AND risk_level is 'low' → decide: approve
 - If completeness < 0.5 OR risk_level is 'high' → decide: reject  
 - Otherwise → decide: request_changes
- 
+
 Respond with ONLY one word: approve, reject, or request_changes"""
         
         decision = "request_changes"
@@ -114,37 +113,32 @@ Respond with ONLY one word: approve, reject, or request_changes"""
             "ERROR",
             "0.5"
         )
- 
-try:
-    with gr.Blocks(title="Project Approval AI") as demo:
-        gr.Markdown("# Project Approval Evaluation System")
-        gr.Markdown("Evaluate project proposals using AI with different difficulty levels")
-        
-        with gr.Row():
-            difficulty = gr.Radio(
-                choices=["easy", "medium", "hard"],
-                value="easy",
-                label="Difficulty Level"
-            )
-        
-        submit_btn = gr.Button("Evaluate Project", variant="primary")
-        
-        with gr.Row():
-            project_info = gr.Textbox(label="Project Information", lines=6)
-            decision_output = gr.Textbox(label="Decision")
-            reward_output = gr.Textbox(label="Reward")
-        
-        submit_btn.click(
-            fn=evaluate_project,
-            inputs=[difficulty],
-            outputs=[project_info, decision_output, reward_output]
+
+# Create the Gradio interface
+with gr.Blocks(title="Project Approval AI") as demo:
+    gr.Markdown("# Project Approval Evaluation System")
+    gr.Markdown("Evaluate project proposals using AI with different difficulty levels")
+    
+    with gr.Row():
+        difficulty = gr.Radio(
+            choices=["easy", "medium", "hard"],
+            value="easy",
+            label="Difficulty Level"
         )
- 
-    def main():
-        return demo
- 
-    if __name__ == "__main__":
-        demo.launch(server_name="0.0.0.0", server_port=7860)
-        
-except Exception as e:
-    print(f"Critical error: {e}")
+    
+    submit_btn = gr.Button("Evaluate Project", variant="primary")
+    
+    with gr.Row():
+        project_info = gr.Textbox(label="Project Information", lines=6)
+        decision_output = gr.Textbox(label="Decision")
+        reward_output = gr.Textbox(label="Reward")
+    
+    submit_btn.click(
+        fn=evaluate_project,
+        inputs=[difficulty],
+        outputs=[project_info, decision_output, reward_output]
+    )
+
+# Launch the app - HF Spaces will handle this
+if __name__ == "__main__":
+    demo.launch(server_name="0.0.0.0", server_port=7860, share=False)
