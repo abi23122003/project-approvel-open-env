@@ -6,9 +6,10 @@ from openai import OpenAI
 from environment import ProjectApprovalEnv
 from models import Action
 
-API_KEY = os.getenv("API_KEY") or os.getenv("OPENAI_API_KEY") or os.getenv("HF_TOKEN")
-MODEL_NAME = os.environ.get("MODEL_NAME", "llama-3.1-8b-instant")
-API_BASE_URL = os.environ.get("API_BASE_URL", "https://api.groq.com/openai/v1")
+# Use environment variables - no defaults for security
+API_KEY = os.environ["API_KEY"]
+MODEL_NAME = os.environ["MODEL_NAME"]
+API_BASE_URL = os.environ["API_BASE_URL"]
 BENCHMARK = "project-approval"
 
 client = OpenAI(api_key=API_KEY, base_url=API_BASE_URL)

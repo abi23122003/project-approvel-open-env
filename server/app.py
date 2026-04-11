@@ -9,33 +9,22 @@ from models import Action
 
 load_dotenv()
 
-# Get API keys but don't initialize clients yet - will initialize lazily when needed
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-USE_GROQ = GROQ_API_KEY is not None and os.getenv("USE_GROQ", "true").lower() == "true"
+# Use environment variables - no defaults for security
+API_KEY = os.environ["API_KEY"]
+MODEL_NAME = os.environ["MODEL_NAME"]
+API_BASE_URL = os.environ["API_BASE_URL"]
 
-# Default model names
-MODEL_NAME = os.getenv("MODEL_NAME", "mixtral-8x7b-32768" if USE_GROQ else "gpt-3.5-turbo")
-API_BASE_URL = os.getenv("API_BASE_URL", "https://api.openai.com/v1")
-
-# Lazy-initialized clients
+# Initialize OpenAI client
 client = None
 
 def get_client():
-    """Get or initialize the API client lazily"""
+    """Get or initialize the OpenAI client"""
     global client
     if client is not None:
         return client
     
-    if USE_GROQ and GROQ_API_KEY:
-        from groq import Groq
-        client = Groq(api_key=GROQ_API_KEY)
-    elif OPENAI_API_KEY:
-        from openai import OpenAI
-        client = OpenAI(api_key=OPENAI_API_KEY, base_url=API_BASE_URL, timeout=30.0)
-    else:
-        raise ValueError("No API credentials configured. Set GROQ_API_KEY or OPENAI_API_KEY environment variable.")
-    
+    from openai import OpenAI
+    client = OpenAI(api_key=API_KEY, base_url=API_BASE_URL, timeout=30.0)
     return client
 
 def evaluate_project(difficulty):
@@ -66,20 +55,12 @@ Respond with ONLY one word: approve, reject, or request_changes"""
         decision = "request_changes"
         try:
             api_client = get_client()
-            
-            if USE_GROQ:
-                response = api_client.chat.completions.create(
-                    model=MODEL_NAME,
-                    max_tokens=10,
-                    messages=[{"role": "user", "content": prompt}]
-                )
-            else:
-                response = api_client.chat.completions.create(
-                    model=MODEL_NAME,
-                    max_tokens=10,
-                    messages=[{"role": "user", "content": prompt}],
-                    timeout=20.0
-                )
+            response = api_client.chat.completions.create(
+                model=MODEL_NAME,
+                max_tokens=10,
+                messages=[{"role": "user", "content": prompt}],
+                timeout=20.0
+            )
             decision = response.choices[0].message.content.strip().lower()
             if decision not in ["approve", "reject", "request_changes"]:
                 decision = "request_changes"
