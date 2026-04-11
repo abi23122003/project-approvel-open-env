@@ -15,3 +15,25 @@ action_space:
 
 reward:
   score: float
+
+tasks:
+  - id: task_easy
+    name: "Easy Task"
+    description: "Easy project approval task with high completeness and low risk"
+    grader:
+      type: python
+      callable: "tasks.easy:grader_easy"
+  
+  - id: task_medium
+    name: "Medium Task"
+    description: "Medium difficulty project approval task with moderate completeness and risk"
+    grader:
+      type: python
+      callable: "tasks.medium:grader_medium"
+  
+  - id: task_hard
+    name: "Hard Task"
+    description: "Hard project approval task with low completeness and high risk"
+    grader:
+      type: python
+      callable: "tasks.hard:grader_hard"

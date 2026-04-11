@@ -4,11 +4,15 @@ def grader_hard(prediction, correct_answer):
     MUST return score strictly between 0 and 1 (never 0.0 or 1.0).
     """
     if prediction == correct_answer:
-        return 0.7  # Correct
+        score = 0.80  # Correct answer
     elif prediction == "request_changes":
-        return 0.5  # Partial
+        score = 0.55  # Partial credit
     else:
-        return 0.3  # Incorrect
+        score = 0.30  # Wrong answer
+    
+    # Ensure score is strictly between 0 and 1
+    return max(0.01, min(score, 0.99))
+
 
 def get_hard_task():
     return {
@@ -16,5 +20,5 @@ def get_hard_task():
         "completeness": 0.3,
         "risk_level": "high",
         "correct_decision": "reject",
-        "grader": lambda pred, correct: 0.7
+        "grader": grader_hard
     }

@@ -4,11 +4,15 @@ def grader_medium(prediction, correct_answer):
     MUST return score strictly between 0 and 1 (never 0.0 or 1.0).
     """
     if prediction == correct_answer:
-        return 0.65  # Correct
+        score = 0.75  # Correct answer
     elif prediction == "request_changes":
-        return 0.45  # Partial
+        score = 0.50  # Partial credit
     else:
-        return 0.25  # Incorrect
+        score = 0.25  # Wrong answer
+    
+    # Ensure score is strictly between 0 and 1
+    return max(0.01, min(score, 0.99))
+
 
 def get_medium_task():
     return {
@@ -16,5 +20,5 @@ def get_medium_task():
         "completeness": 0.6,
         "risk_level": "medium",
         "correct_decision": "request_changes",
-        "grader": lambda pred, correct: 0.65
+        "grader": grader_medium
     }
