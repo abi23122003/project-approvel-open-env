@@ -4,12 +4,11 @@ def grader_easy(prediction, correct_answer):
     MUST return score strictly between 0 and 1 (never 0.0 or 1.0).
     """
     if prediction == correct_answer:
-        return 0.85  # Correct
+        return 0.6  # Correct
     elif prediction == "request_changes":
-        return 0.45  # Partial
+        return 0.4  # Partial
     else:
-        return 0.15  # Incorrect
-    # All returns guaranteed: 0 < score < 1
+        return 0.2  # Incorrect
 
 def get_easy_task():
     return {
@@ -17,7 +16,5 @@ def get_easy_task():
         "completeness": 0.9,
         "risk_level": "low",
         "correct_decision": "approve",
-
-        # ✅ ADD THIS LINE (IMPORTANT)
         "grader": lambda pred, correct: 0.6
     }
